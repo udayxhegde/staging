@@ -24,7 +24,7 @@ author:
 #email: your-email@example.com
 description: >- # this means to ignore newlines until "baseurl:"
   A blog on enterprise identity scenarios and capabilities
-baseurl: "" # the subpath of your site, e.g. /blog
+baseurl: "staging" # the subpath of your site, e.g. /blog
 url: "https://blog.identitydigest.com" # the base hostname & protocol for your site, e.g. http://example.com
 permalink: /:title/
 
@@ -38,15 +38,12 @@ minima:
 
 # Enter your Google Analytics web tracking code (e.g. UA-2110908-2) to activate tracking
 # google_analytics: UA-172927082-3
-google_analytics: G-ZPKVM3K4ZS
+# google_analytics: G-ZPKVM3K4ZS
 
 # Build settings
 
 remote_theme: jekyll/minima
 plugins:
-  - jekyll-sitemap # Create a sitemap using the official Jekyll sitemap gem
-  - jekyll-feed
-  - jekyll-seo-tag
   - jekyll-remote-theme
   
 
