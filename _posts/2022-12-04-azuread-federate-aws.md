@@ -16,18 +16,18 @@ Digital transformation is resulting in the deployment of more software workloads
 ## Using Azure AD workload identity federation with AWS
 Azure AD workload identity federation is a new capability on workload identities such as Azure AD applications and managed identities. Earlier blog posts on this site provide details for using this capability with [Kubernetes]({% post_url 2022-01-11-azuread-federate-k8s %}), [SPIFFE]({% post_url 2022-01-14-azuread-federate-spiffe %}), [GitHub]({% post_url 2021-10-27-azuread-federate-github-actions %}), and [Google Cloud Platform]({%post_url 2021-11-11-azuread-federate-gcp %}). 
 
-Using this pattern with AWS is not straightforward. The identity model in AWS is different from other platforms such as GCP, Kubernetes, and GitHub. While AWS IAM provides an elegant model for accessing resources within the AWS cloud, it's not easy to use it to access resources in other cloud providers. The step-by-step guide in the first part of this blog post shows how you can pick pieces of AWS Cognito to federate with Azure AD. For a detailed understanding of how this works end-to-end, see the advanced topics later in this blog post.
+Using this pattern with AWS is not straightforward. The identity model in AWS is different from other platforms such as GCP, Kubernetes, and GitHub. While AWS IAM provides an elegant model for accessing resources within the AWS cloud, it's not easy to use it to access resources in other cloud providers. The step-by-step guide in the first part of this blog post shows how you can pick pieces of Amazon Cognito to federate with Azure AD. For a detailed understanding of how this works end-to-end, see the advanced topics later in this blog post.
 
 There are three parts to using Azure AD workload identity federation from your service in AWS.
-1. An identity in AWS Cloud to which AWS Cognito will issue a token.
+1. An identity in AWS Cloud to which Amazon Cognito will issue a token.
 2. Configure Azure AD application or managed identity to trust that AWS identity
-3. Get a token for the AWS Cognito identity and exchange it for a token for an Azure AD workload identity.
+3. Get a token for the Amazon Cognito identity and exchange it for a token for an Azure AD workload identity.
 
 Let's look at each of these three parts in detail.
 
-### Part 1: Create an identity in AWS Cognito
+### Part 1: Create an identity in Amazon Cognito
 
-The AWS Cognito Identity pool is the most suited for our needs. It is necessary, for security purposes, to create a dedicated identity pool to federate with Azure AD since Cognito only issues tokens with the identity pool as the audience. See the advanced topics in the latter part of this blog post for more details on why this matters.
+The Amazon Cognito Identity pool is the most suited for our needs. It is necessary, for security purposes, to create a dedicated identity pool to federate with Azure AD since Cognito only issues tokens with the identity pool as the audience. See the advanced topics in the latter part of this blog post for more details on why this matters.
 #### Create an identity pool to federate with Azure AD
 In this step, we are going to create a Cognito identity pool. And set it up so that we can use identities from that pool for our software workloads. 
 Head to the AWS console and select the Cognito service. Go to "Manage Identity Pools" and pick "Create new identity pool".
@@ -82,7 +82,7 @@ aws cognito-identity get-open-id-token-for-developer-identity \
     --identity-pool-id us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef  
     --logins azure-access=cc312bc3-3859-42f1-9598-2371055dbfa4 --region us-east-1
 ```
-Here's the response from AWS Cognito
+Here's the response from Amazon Cognito
 ```
 {
     "Token": <a long token string>,
@@ -94,16 +94,16 @@ At this point, we have a Cognito identity linked to the client_id of our managed
 ![Cognito identity browse](/images/aws-aad-federate/cognito-identity-browse-combined.png)
 
 
-### Part 2: Configuring an Azure AD identity to trust the AWS Cognito token
+### Part 2: Configuring an Azure AD identity to trust the Amazon Cognito token
 
 Azure AD has two kinds of workload identities: applications and managed identities. Both identities support federation with a token from an OIDC token issuer. 
 
 In this step-by-step, we will use a managed identity that has already been granted access to my Azure storage. We will tell Azure AD to link the managed identity to the Cognito identity by creating a Federated Identity Credential on the managed identity. You can add up to twenty of these trusts to each Azure AD workload identity.
 
 The most important parts of the federated identity credential are the following:
-- subject: this should match the "sub" claim in the token issued by another identity provider, such as AWS Cognito. This is the IdentityId we got from Cognito in the earlier section. (In this example: "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90").
-- issuer: this should match the "iss" claim in the token issued by the identity provider. The issuer is an URL that must comply with the OIDC Discovery Spec. Azure AD will use this issuer URL to fetch the keys necessary to validate the token. In the case of AWS Cognito, the issuer is  "https://cognito-identity.amazonaws.com"
-- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in AWS Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the audience in the federated identity credential with the Identity pool id we got in Part 1. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
+- subject: this should match the "sub" claim in the token issued by another identity provider, such as Amazon Cognito. This is the IdentityId we got from Cognito in the earlier section. (In this example: "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90").
+- issuer: this should match the "iss" claim in the token issued by the identity provider. The issuer is an URL that must comply with the OIDC Discovery Spec. Azure AD will use this issuer URL to fetch the keys necessary to validate the token. In the case of Amazon Cognito, the issuer is  "https://cognito-identity.amazonaws.com"
+- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in Amazon Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the audience in the federated identity credential with the Identity pool id we got in Part 1. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
 
 Let's use these values to configure the federated identity credential on our managed identity. You can configure the federated credential on a managed identity using the Azure portal, the Azure CLI, or Azure ARM templates. To create the federated credential, you need to have the role of either owner or contributor of the managed identity. 
 
@@ -133,7 +133,7 @@ On success, you should expect to see something like this:
 ### Part 3: Getting a Cognito token and exchanging it for an Azure AD token
 Now that we have configured an Azure AD workload identity to trust the Cognito identity, we are ready for our software workload to get a token from Cognito and exchange it for an Azure AD access token.
 
-We will use the AWS Cognito SDK to get Cognito tokens. Depending on where the software workload is running, EC2 or Lambda, you first need to grant the compute environment permissions to request tokens from your Cognito pool.
+We will use the Amazon Cognito SDK to get Cognito tokens. Depending on where the software workload is running, EC2 or Lambda, you first need to grant the compute environment permissions to request tokens from your Cognito pool.
 
 #### Configure your EC2 instance or Lambda with permissions to your Cognito identity pool
 Head to the AWS IAM console. Create a permission policy for the Cognito pool. Pick the Cognito Identity service, and add the actions of "GetOpenIdTokenForDeveloperIdentity", "LookupDeveloperIdentity", "MergeDeveloperIdentities", and "UnlinkDeveloperIdentities". Pick the specific resource that identifies the Cognito identity pool just created.
@@ -302,13 +302,16 @@ AWS is different from other cloud providers when dealing with identities for sof
 
 I am new to Cognito, so take everything I say here with a grain of salt. My colleague, Alexander Riman, suggested that the Cognito Identity pool may be a viable option to federate with Azure AD.
 
-AWS Cognito issues JWT tokens which can be validated via the OpenID Connect protocol. Cognito has two pools, the User pool, and the Identity pool. The User pool enables developers to authenticate users to software workloads. The Identity pool has a custom authentication provider for developers to get tokens identifying their software workloads. The identity pool's primary purpose is to authenticate workloads to access AWS resources. The audience claim in the token is always the identity pool id and is not customizable. Despite this limitation, the Identity pool serves the purpose of federating with Azure AD.
+Amazon Cognito issues JWT tokens which can be validated via the OpenID Connect protocol. Cognito has two pools, the User pool, and the Identity pool. The User pool enables developers to authenticate users to software workloads. The Identity pool has a custom authentication provider for developers to get tokens identifying their software workloads. The identity pool's primary purpose is to authenticate workloads to access AWS resources. The audience claim in the token is always the identity pool id and is not customizable. Despite this limitation, the Identity pool serves the purpose of federating with Azure AD.
 
 Cognito [documents](https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow.html) two auth flows in the Identity pool, the enhanced auth flow, and the basic auth flow. 
 
 #### Understanding the Cognito enhanced auth flow
 This flow is also called the simplified flow. In this flow, the workload only communicates with the Cognito service and gets temporary credentials for one of the two roles in Cognito. It can access the AWS resources available to that role.
-![Cognitor enhanced end flow](/images/aws-aad-federate/amazon-cognito-dev-auth-enhanced-flow.png)
+
+Here's the token flow image for the enhanced flow, copied from Amazon documentation:
+
+![Cognitor enhanced auth flow](https://docs.aws.amazon.com/images/cognito/latest/developerguide/images/amazon-cognito-dev-auth-enhanced-flow.png)
 1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
 2. Cognito finds the Cognito id matching the developer id (or creates a new matching Cognito id) and returns a token for that identity.
 3. The software workload presents the token to Cognito. Cognito matches this to one of the two roles in Cognito. Cognito requests temporary credentials from AWS STS for the AWS resources permitted via that role.
@@ -319,7 +322,8 @@ In this auth flow, you manage only two roles in Cognito. However, all your workl
 #### Understanding the Cognito basic auth flow
 In the basic auth flow, the software workload uses the JWT token issued by Cognito to assume an AWS IAM role. 
 
-![Cognito basic flow](/images/aws-aad-federate/amazon-cognito-dev-auth-basic-flow.png)
+Here's the token flow image for the basic flow, copied from Amazon documentation:
+![Cognito basic auth flow](https://docs.aws.amazon.com/images/cognito/latest/developerguide/images/amazon-cognito-dev-auth-basic-flow.png)
 1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
 2. Cognito finds the Cognito id matching the developer id (or creates a new matching Cognito id) and returns a token for that identity.
 3. The software workload presents the token to AWS STS with an AWS IAM role to AssumeRoleWithWebIdentity.
