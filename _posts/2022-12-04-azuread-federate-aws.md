@@ -300,8 +300,6 @@ You can use [ARM templates, Bicep, or Terraform](https://learn.microsoft.com/en-
 
 AWS is different from other cloud providers when dealing with identities for software workloads. There is no native concept of a workload identity or service account. And there is no direct mechanism for an EC2 instance to request a JWT token, for example via IMDS, to authenticate to another identity provider.
 
-I am new to Cognito, so take everything I say here with a grain of salt. My colleague, Alexander Riman, suggested that the Cognito Identity pool may be a viable option to federate with Azure AD.
-
 Amazon Cognito issues JWT tokens which can be validated via the OpenID Connect protocol. Cognito has two pools, the User pool, and the Identity pool. The User pool enables developers to authenticate users to software workloads. The Identity pool has a custom authentication provider for developers to get tokens identifying their software workloads. The identity pool's primary purpose is to authenticate workloads to access AWS resources. The audience claim in the token is always the identity pool id and is not customizable. Despite this limitation, the Identity pool serves the purpose of federating with Azure AD.
 
 Cognito [documents](https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow.html) two auth flows in the Identity pool, the enhanced auth flow, and the basic auth flow. 
