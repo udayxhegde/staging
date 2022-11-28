@@ -25,7 +25,7 @@ author:
 description: >- # this means to ignore newlines until "baseurl:"
   A blog on enterprise identity scenarios and capabilities
 #baseurl: "" # the subpath of your site, e.g. /blog
-url: "https://udayxhegde.github.io/staging" # the base hostname & protocol for your site, e.g. http://example.com
+url: "https://blogs.identitydigest.com/staging" # the base hostname & protocol for your site, e.g. http://example.com
 permalink: /:title/
 
 minima:
@@ -38,7 +38,7 @@ minima:
 
 # Enter your Google Analytics web tracking code (e.g. UA-2110908-2) to activate tracking
 # google_analytics: UA-172927082-3
-# google_analytics: G-95SZHVSVEC
+google_analytics: G-95SZHVSVEC
 
 # Build settings
 
