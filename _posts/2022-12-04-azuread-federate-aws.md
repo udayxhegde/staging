@@ -67,7 +67,7 @@ aws cognito-identity get-open-id-token-for-developer-identity \
     --identity-pool-id us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef  \
     --logins azure-access=wlid_1 --region us-east-1
 ```
-Note that wlid_1 is just a random string I made up for one of my workloads. Any workload authorized by me to get tokens from this pool can request tokens by providing this identity. Here's the response from the AWS CLI.
+Note that wlid_1 is just a random string I made up for one of my workloads. Any workload authorized by me to get tokens from this pool can request tokens by providing this string. Here's the response from the AWS CLI.
 
 ```JSON
 {
@@ -75,10 +75,10 @@ Note that wlid_1 is just a random string I made up for one of my workloads. Any 
     "IdentityId": "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
 }
 ```
-Since this is the first time the identity pool sees a request for wlid_1, it created an identity in the pool and linked it with my wlid_1 identity. Any future token request for wlid_1 will always return a token for this IdentityId. The subject claim of the token will contain the Cognito IdentityId. In my example above, the subject claim will be "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
+Since this is the first time the identity pool sees a request for wlid_1, it created an identity in the pool and linked it with my wlid_1 identity. Any future token request for wlid_1 will always return a token for this Cognito identity. The subject claim of the token will contain the Cognito IdentityId. In my example above, the subject claim will be "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
 
-You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you plan to use for the federation instead of inventing your strings. 
-Let's use that approach in this walkthrough and create a Cognito identity using the client_id of the managed identity we will use.
+
+You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you will use for this federation. Let's use that approach in this walkthrough. Let's create a Cognito identity using the client_id of the managed identity we will use.
 
 ```
 aws cognito-identity get-open-id-token-for-developer-identity \
@@ -136,9 +136,9 @@ In this step-by-step, we will use a managed identity that has already been grant
 The most important parts of the federated identity credential are the following:
 - subject: this should match the "sub" claim in the token issued by another identity provider, such as Amazon Cognito. This is the IdentityId we got from Cognito in the earlier section. (In this example: "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90").
 - issuer: this should match the "iss" claim in the token issued by the identity provider. The issuer is an URL that must comply with the OIDC Discovery Spec. Azure AD will use this issuer URL to fetch the keys necessary to validate the token. In the case of Amazon Cognito, the issuer is  "https://cognito-identity.amazonaws.com"
-- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in Amazon Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the audience in the federated identity credential with the Identity pool id we got in Part 1. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
+- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in Amazon Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the Cognito idenitity pool id as the audience in the federated identity credential. Tokens with this audience value are intended for Azure AD. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
 
-Let's use these values to configure the federated identity credential on our managed identity. You can configure the federated credential on a managed identity using the Azure portal, the Azure CLI, or Azure ARM templates. To create the federated credential, you need to have the role of either owner or contributor of the managed identity. 
+Let's use these values to configure the federated identity credential on our managed identity. You can configure the federated credential on a managed identity using the Azure portal, the Azure CLI, or Azure ARM templates. The role of either owner or contributor is required to create the federated credential on a managed identity. 
 
 #### Using Azure CLI
 ```
@@ -433,10 +433,10 @@ Since we are not accessing AWS resources using our pool, we don’t need to add 
 ### The need to keep the Cognito pool dedicated to Azure AD federation
 The audience claim in JWT tokens is critical for security reasons. It contains the intended recipient of the token. Any service receiving a token must check it is the intended recipient of the token. To see why this is important, let's consider a hypothetical example. Service-A needs to authenticate to Service-B and Service-C. If it uses the same token to authenticate to both services, Service-B can also use that token to act like Service-A when accessing Service-C.  However, if the token had the audience indicating the token was for Service-B, then Service-C would reject that token since the intended audience is Service-B.
 
-In the  WS Cognito identity pool, the audience is fixed and always the identity pool id.  Tokens issued by the identity pool are intended for a single recipient. When you configure Azure AD to accept tokens with the identity pool id as the audience, you make Azure AD the intended recipient of these tokens. It's a security best practice to avoid using tokens with the same audience when accessing AWS resources. Use a different identity pool for that purpose.
+In the  AWS Cognito identity pool, the audience is fixed and always the identity pool id.  Tokens issued by the identity pool are intended for a single recipient. When you configure Azure AD to accept tokens with the identity pool id as the audience, you make Azure AD the intended recipient of these tokens. It's a security best practice to avoid using tokens with the same audience when accessing AWS resources. Use a different identity pool for that purpose.
 
 ## In conclusion
-Azure AD workload identity federation is a new capability that allows you to get rid of secrets in several scenarios such as services running in Kubernetes clusters, GitHub Actions workflow, and services running in Google and AWS Cloud. Stay tuned for many more scenarios  where this capability can help remove secrets.
+Azure AD workload identity federation is a capability that allows you to get rid of secrets in several scenarios such as services running in Kubernetes clusters, GitHub Actions workflow, and services running in Google and AWS Cloud. Stay tuned for many more scenarios  where this capability can help remove secrets.
 
 If you have any comments, feedback, or suggestions on this topic, I would love to hear from you. [DM me on twitter](https://twitter.com/messages/compose?recipient_id=1446741344)
 
