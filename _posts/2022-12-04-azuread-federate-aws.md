@@ -141,6 +141,7 @@ The most important parts of the federated identity credential are the following:
 Let's use these values to configure the federated identity credential on our managed identity. You can configure the federated credential on a managed identity using the Azure portal, the Azure CLI, or Azure ARM templates. The role of either owner or contributor is required to create the federated credential on a managed identity. 
 
 #### Using Azure CLI
+
 ```
 az identity federated-credential create --name AccessFromAWS --identity-name workload-federate-MI1 \
    --resource-group codesamples-rg --issuer https://cognito-identity.amazonaws.com \
@@ -165,9 +166,10 @@ On success, you should expect to see something like this:
 #### Verify you can access Azure using the Cognito token (optional)
 At this point, you have a Cognito pool setup with a Cognito identity. The Azure managed identity has a federated credential matching the Cognito identity. You can now do a quick test with the AWS and Azure CLIs and verify that you can access Azure resources available to that managed identity using the Cognito token.
 
-In my case, I have granted the managed identity access to my Azure blog storage. And I can do the following to verify the set up.
+In my case, I have granted the managed identity access to my Azure blob storage. And I can do the following to verify the set up.
 
-- Get a Cognito token using AWS CLI
+##### Get a Cognito token using AWS CLI
+
 ```
 aws cognito-identity get-open-id-token-for-developer-identity \
     --identity-pool-id us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef  
@@ -175,19 +177,22 @@ aws cognito-identity get-open-id-token-for-developer-identity \
 ```
 
 On success, the response would look something like this:
+
 ```
 {
-    "Token": <a long token string>,
+    "Token": <Token string>,
     "IdentityId": "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90"
 }
 ```
-- Login to Azure using that token
+##### Login to Azure using that token
 
 ```
-az login --federated-token <Token string> --tenant <tenant id> --service-principal -u <client_id of managed identity>
+az login --federated-token <Token string> --tenant <tenant id> \
+    --service-principal -u <client_id of managed identity>
 ```
 
 If this succeeds, you should see a response that looks like:
+
 ```
 [
   {
@@ -196,7 +201,7 @@ If this succeeds, you should see a response that looks like:
     "id": "22a08bf1-fb31-4757-a836-cd035976a2c0",
     "isDefault": true,
     "managedByTenants": [],
-    "name": "Visual Studio Enterprise sub",
+    "name": "Visual Studio Enterprise subscription",
     "state": "Enabled",
     "tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47",
     "user": {
@@ -207,9 +212,12 @@ If this succeeds, you should see a response that looks like:
 ]
 ```
 
-- Now access the Azure resource to which you granted access to the managed identity
+##### Access Azure resource
+Now access the Azure resource to which you granted access to the managed identity
+
 ```
-az storage blob exists --container-name test --name testBlob --account-name demofederate --auth-mode login
+az storage blob exists --container-name test --name testBlob \
+    --account-name demofederate --auth-mode login
 ```
 
 A successful response indicates everything is working end-to-end!
@@ -400,10 +408,10 @@ This flow is also called the simplified flow. In this flow, the workload only co
 Here's the token flow image for the enhanced flow, copied from Amazon documentation:
 
 ![Cognitor enhanced auth flow](https://docs.aws.amazon.com/images/cognito/latest/developerguide/images/amazon-cognito-dev-auth-enhanced-flow.png)
-1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
-2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
-3. The software workload presents the token to Cognito. Cognito matches this to one of the two roles in Cognito. Cognito requests temporary credentials from AWS STS for the AWS resources permitted via that role.
-4. Cognito returns the temporary creds for access to those AWS resources.
+>1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
+>2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
+>3. The software workload presents the token to Cognito. Cognito matches this to one of the two roles in Cognito. Cognito requests temporary credentials from AWS STS for the AWS resources permitted via that role.
+>4. Cognito returns the temporary creds for access to those AWS resources.
 
 In this auth flow, you manage only two roles in Cognito. However, all your workloads get access to the same set of AWS resources available through the two roles configured for that pool.
 
@@ -412,10 +420,10 @@ In the basic auth flow, the software workload uses the JWT token issued by Cogni
 
 Here's the token flow image for the basic flow, copied from Amazon documentation:
 ![Cognito basic auth flow](https://docs.aws.amazon.com/images/cognito/latest/developerguide/images/amazon-cognito-dev-auth-basic-flow.png)
-1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
-2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
-3. The software workload presents the token to AWS STS with an AWS IAM role to AssumeRoleWithWebIdentity.
-4. AWS IAM returns the temporary creds for that role. The software workload can access AWS resources assigned to that role. 
+>1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
+>2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
+>3. The software workload presents the token to AWS STS with an AWS IAM role to AssumeRoleWithWebIdentity.
+>4. AWS IAM returns the temporary creds for that role. The software workload can access AWS resources assigned to that role. 
 
 This approach allows you to provide finer-grained access to your workloads by defining different roles in AWS IAM.
 
@@ -423,10 +431,10 @@ This approach allows you to provide finer-grained access to your workloads by de
 We will use a pattern similar to the basic auth flow: get a token from Cognito and then present it to Azure AD to get a token for an identity with access to Azure resources.
 
 ![end to end flow](/images/aws-aad-federate/cognitoaadflow.png)
-1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
-2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
-3. The software workload presents the token to Azure AD and requests a token for a managed identity.
-4. Azure AD validates the token with Cognito and returns an Azure AD token.
+>1. The software workload uses a developer provided id and requests a token from Cognito (GetOpenIdTokenForDeveloperIdentity)
+>2. Cognito finds the Cognito id matching the developer id (or creates a new Cognito id) and returns a token for that identity.
+>3. The software workload presents the token to Azure AD and requests a token for a managed identity.
+>4. Azure AD validates the token with Cognito and returns an Azure AD token.
 
 Since we are not accessing AWS resources using our pool, we don’t need to add any roles to Cognito.
 
