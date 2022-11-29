@@ -13,6 +13,8 @@ Digital transformation is resulting in the deployment of more software workloads
 
 ![AWS AAD federation](/images/aws-aad-federate/aws-aad-title.png)
 
+In an earlier blog post, we discussed [accessing AWS resources from software running in Azure]({% post_url 2021-09-15-azuread-access-aws %}). This blog post discusses accessing Azure resources from software running in AWS.
+
 ## Using Azure AD workload identity federation with AWS
 Azure AD workload identity federation is a new capability on workload identities such as Azure AD applications and managed identities. Earlier blog posts on this site provide details for using this capability with [Kubernetes]({% post_url 2022-01-11-azuread-federate-k8s %}), [SPIFFE]({% post_url 2022-01-14-azuread-federate-spiffe %}), [GitHub]({% post_url 2021-10-27-azuread-federate-github-actions %}), and [Google Cloud Platform]({%post_url 2021-11-11-azuread-federate-gcp %}). 
 
@@ -66,7 +68,8 @@ aws cognito-identity get-open-id-token-for-developer-identity \
     --logins azure-access=wlid_1 --region us-east-1
 ```
 Note that wlid_1 is just a random string I made up for one of my workloads. Any workload authorized by me to get tokens from this pool can request tokens by providing this identity. Here's the response from the AWS CLI.
-```
+
+```JSON
 {
     "Token": <a long token string>,
     "IdentityId": "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
@@ -74,7 +77,7 @@ Note that wlid_1 is just a random string I made up for one of my workloads. Any 
 ```
 Since this is the first time the identity pool sees a request for wlid_1, it created an identity in the pool and linked it with my wlid_1 identity. Any future token request for wlid_1 will always return a token for this IdentityId. The subject claim of the token will contain the Cognito IdentityId. In my example above, the subject claim will be "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
 
-You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you plan to use for the federation instead of inventing your strings.
+You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you plan to use for the federation instead of inventing your strings. 
 Let's use that approach in this walkthrough and create a Cognito identity using the client_id of the managed identity we will use.
 
 ```
@@ -83,15 +86,45 @@ aws cognito-identity get-open-id-token-for-developer-identity \
     --logins azure-access=cc312bc3-3859-42f1-9598-2371055dbfa4 --region us-east-1
 ```
 Here's the response from Amazon Cognito
-```
+
+```JSON
 {
     "Token": <a long token string>,
     "IdentityId": "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90"
 }
 ```
+
+Unraveling the Cognito token shows the following details:
+
+```JSON
+Header
+{
+  "kid": "us-east-11",
+  "typ": "JWS",
+  "alg": "RS512"
+}
+Payload
+{
+  "sub": "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90",
+  "aud": "us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef",
+  "amr": [
+    "authenticated",
+    "azure-access",
+    "azure-access:us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef:cc312bc3-3859-42f1-9598-2371055dbfa4"
+  ],
+  "iss": "https://cognito-identity.amazonaws.com",
+  "exp": 1669672295,
+  "iat": 1669671395
+}
+```
+
+The "iat" claim tells us when the token was issued. The "exp" claim indicates when the token will expire. The difference between the two is 900, showing the token is valid for 900 seconds or 15 minutes.
+
 At this point, we have a Cognito identity linked to the client_id of our managed identity. You can visit the identity browser in Cognito to see your identities. In the below screenshot, notice that the Cognito identity is linked to my developer-provided identity.
 
 ![Cognito identity browse](/images/aws-aad-federate/cognito-identity-browse-combined.png)
+
+
 
 
 ### Part 2: Configuring an Azure AD identity to trust the Amazon Cognito token
@@ -126,6 +159,63 @@ On success, you should expect to see something like this:
   "resourceGroup": "codesamples-rg",
   "subject": "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90",
   "type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials"
+}
+```
+
+#### Verify you can access Azure using the Cognito token (optional)
+At this point, you have a Cognito pool setup with a Cognito identity. The Azure managed identity has a federated credential matching the Cognito identity. You can now do a quick test with the AWS and Azure CLIs and verify that you can access Azure resources available to that managed identity using the Cognito token.
+
+In my case, I have granted the managed identity access to my Azure blog storage. And I can do the following to verify the set up.
+
+- Get a Cognito token using AWS CLI
+```
+aws cognito-identity get-open-id-token-for-developer-identity \
+    --identity-pool-id us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef  
+    --logins azure-access=cc312bc3-3859-42f1-9598-2371055dbfa4 --region us-east-1
+```
+
+On success, the response would look something like this:
+```
+{
+    "Token": <a long token string>,
+    "IdentityId": "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90"
+}
+```
+- Login to Azure using that token
+
+```
+az login --federated-token <Token string> --tenant <tenant id> --service-principal -u <client_id of managed identity>
+```
+
+If this succeeds, you should see a response that looks like:
+```
+[
+  {
+    "cloudName": "AzureCloud",
+    "homeTenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47",
+    "id": "22a08bf1-fb31-4757-a836-cd035976a2c0",
+    "isDefault": true,
+    "managedByTenants": [],
+    "name": "Visual Studio Enterprise sub",
+    "state": "Enabled",
+    "tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47",
+    "user": {
+      "name": "cc312bc3-3859-42f1-9598-2371055dbfa4",
+      "type": "servicePrincipal"
+    }
+  }
+]
+```
+
+- Now access the Azure resource to which you granted access to the managed identity
+```
+az storage blob exists --container-name test --name testBlob --account-name demofederate --auth-mode login
+```
+
+A successful response indicates everything is working end-to-end!
+```
+{
+  "exists": true
 }
 ```
 
@@ -300,7 +390,7 @@ You can use [ARM templates, Bicep, or Terraform](https://learn.microsoft.com/en-
 
 AWS is different from other cloud providers when dealing with identities for software workloads. There is no native concept of a workload identity or service account. And there is no direct mechanism for an EC2 instance to request a JWT token, for example via IMDS, to authenticate to another identity provider.
 
-Amazon Cognito issues JWT tokens which can be validated via the OpenID Connect protocol. Cognito has two pools, the User pool, and the Identity pool. The User pool enables developers to authenticate users to software workloads. The Identity pool has a custom authentication provider for developers to get tokens identifying their software workloads. The identity pool's primary purpose is to authenticate workloads to access AWS resources. The audience claim in the token is always the identity pool id and is not customizable. Despite this limitation, the Identity pool serves the purpose of federating with Azure AD.
+Amazon Cognito issues JWT tokens that can be validated via the OpenID Connect protocol. Cognito has two pools, the User pool, and the Identity pool. The User pool enables developers to authenticate users to software workloads. It does not offer any support to identify software workloads. The Identity pool has a custom authentication provider for developers to provide identities to their software workloads and get tokens for those identities. The identity pool's purpose is to authenticate workloads to access AWS resources. The audience claim in the token is always the identity pool id and is not customizable. Despite this limitation, the Identity pool will serve our purpose of federating with Azure AD.
 
 Cognito [documents](https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow.html) two auth flows in the Identity pool, the enhanced auth flow, and the basic auth flow. 
 
@@ -343,7 +433,7 @@ Since we are not accessing AWS resources using our pool, we don’t need to add 
 ### The need to keep the Cognito pool dedicated to Azure AD federation
 The audience claim in JWT tokens is critical for security reasons. It contains the intended recipient of the token. Any service receiving a token must check it is the intended recipient of the token. To see why this is important, let's consider a hypothetical example. Service-A needs to authenticate to Service-B and Service-C. If it uses the same token to authenticate to both services, Service-B can also use that token to act like Service-A when accessing Service-C.  However, if the token had the audience indicating the token was for Service-B, then Service-C would reject that token since the intended audience is Service-B.
 
-In the  WS Cognito identity pool, the audience is fixed and always the identity pool id.  Tokens issued by the identity pool are intended for a single recipient. When you configure Azure AD to accept tokens with the identity pool id as the audience, you make Azure AD the intended recipient of these tokens. It's a security best practice to avoid using tokens with the same audience when accessing AWS resources. AWS resources. Use a different identity pool for that purpose.
+In the  WS Cognito identity pool, the audience is fixed and always the identity pool id.  Tokens issued by the identity pool are intended for a single recipient. When you configure Azure AD to accept tokens with the identity pool id as the audience, you make Azure AD the intended recipient of these tokens. It's a security best practice to avoid using tokens with the same audience when accessing AWS resources. Use a different identity pool for that purpose.
 
 ## In conclusion
 Azure AD workload identity federation is a new capability that allows you to get rid of secrets in several scenarios such as services running in Kubernetes clusters, GitHub Actions workflow, and services running in Google and AWS Cloud. Stay tuned for many more scenarios  where this capability can help remove secrets.
