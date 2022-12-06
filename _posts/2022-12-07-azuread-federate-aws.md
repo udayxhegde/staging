@@ -3,13 +3,13 @@ layout: post
 current: post
 navigation: True
 title: Azure AD workload identity federation with AWS
-date: 2022-12-06 12:00:00
+date: 2022-12-07 12:00:00
 class: post-template
 subclass: 'post'
 author: uday
 
 ---
-Digital transformation is resulting in the deployment of more software workloads. Businesses are building or rewriting their software workloads using cloud-native architectures. Multi-cloud is becoming the new normal, as developers cherry-pick the cloud resources that best suit their needs. When applications or services run outside Azure and need access to Azure resources, they need secrets to authenticate to Azure AD. These secrets pose a security risk. Securing these secrets, storing them securely and rotating them regularly, is an overhead for developers. Azure AD workload identity federation removes the need for these secrets in selected scenarios. Developers can configure Azure AD workload identities to trust tokens issued by another identity provider. This blog post explores how you can access Azure resources from software workloads running in Amazon Web Services (AWS). 
+Digital transformation is resulting in the deployment of more software workloads. Businesses are building or rewriting their software workloads using cloud-native architectures. Multi-cloud is becoming the new normal, as developers cherry-pick the cloud resources that best suit their needs. When applications or services run outside Azure and need access to Azure resources, they need secrets to authenticate to Azure AD. These secrets pose a security risk. Securely storing these secrets and regularly rotating them is an unnecessary developer burden. Azure AD workload identity federation removes the need for these secrets in selected scenarios. Developers can configure Azure AD workload identities to trust tokens issued by another identity provider. This blog post explores how you can access Azure resources from software workloads running in Amazon Web Services (AWS). 
 
 ![AWS AAD federation](/images/aws-aad-federate/aws-aad-title.png)
 
@@ -18,7 +18,7 @@ In an earlier blog post, we discussed [accessing AWS resources from software run
 ## Using Azure AD workload identity federation with AWS
 Azure AD workload identity federation is a capability on workload identities such as Azure AD applications and managed identities. Earlier blog posts on this site provide details for using this capability with [Kubernetes]({% post_url 2022-01-11-azuread-federate-k8s %}), [SPIFFE]({% post_url 2022-01-14-azuread-federate-spiffe %}), [GitHub]({% post_url 2021-10-27-azuread-federate-github-actions %}), and [Google Cloud Platform]({%post_url 2021-11-11-azuread-federate-gcp %}). 
 
-Using this pattern with AWS is not straightforward. The identity model in AWS is different from other platforms such as GCP, Kubernetes, and GitHub. While AWS IAM provides an elegant model for accessing resources within the AWS cloud, it's not easy to use it to access resources in other cloud providers. The step-by-step guide in the first part of this blog post shows how you can use capabilities of Amazon Cognito to federate with Azure AD. For a detailed understanding of how this works end-to-end, see the advanced topics later in this blog post.
+Using this pattern with AWS is not straightforward. The identity model in AWS is different from other platforms such as GCP, Kubernetes, and GitHub. While AWS IAM provides an elegant model for accessing resources within the AWS cloud, it's not easy to use it to access resources in other cloud providers. The step-by-step guide in the first part of this blog post shows how you can use the capabilities of Amazon Cognito to federate with Azure AD. For a detailed understanding of how this works end-to-end, see the advanced topics later in this blog post.
 
 There are three parts to using Azure AD workload identity federation from your service in AWS.
 1. An identity in AWS Cloud to which Amazon Cognito will issue a token.
@@ -78,7 +78,7 @@ Note that wlid_1 is just a random string I made up for one of my workloads. Any 
 Since this is the first time the identity pool sees a request for wlid_1, it created an identity in the pool and linked it with my wlid_1 identity. Any future token request for wlid_1 will always return a token for this Cognito identity. The subject claim of the token will contain the Cognito IdentityId. In my example above, the subject claim will be "us-east-1:d2237c93-e079-4eb3-964c-9c9a87c465d7"
 
 
-You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you will use for this federation. Let's use that approach in this walkthrough. Let's create a Cognito identity using the client_id of the managed identity we will use.
+You may wonder how you will keep track of an additional set of these developer identities for your workloads. A simpler alternative is to use the client_id of the Azure AD workload identity you will use for this federation. Let's use that approach in this walkthrough. Let's create a Cognito identity using the client_id of our managed identity.
 
 ```
 aws cognito-identity get-open-id-token-for-developer-identity \
@@ -136,7 +136,7 @@ In this step-by-step, we will use a managed identity that has already been grant
 The most important parts of the federated identity credential are the following:
 - subject: this should match the "sub" claim in the token issued by another identity provider, such as Amazon Cognito. This is the IdentityId we got from Cognito in the earlier section. (In this example: "us-east-1:fa442090-a36f-44d4-81ac-ab21418d0e90").
 - issuer: this should match the "iss" claim in the token issued by the identity provider. The issuer is an URL that must comply with the OIDC Discovery Spec. Azure AD will use this issuer URL to fetch the keys necessary to validate the token. In the case of Amazon Cognito, the issuer is  "https://cognito-identity.amazonaws.com"
-- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in Amazon Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the Cognito idenitity pool id as the audience in the federated identity credential. Tokens with this audience value are intended for Azure AD. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
+- audience: this should match the "aud" claim in the token. For security reasons, you should pick a value that is unique for tokens meant for Azure AD. The Microsoft recommended value is "api://AzureADTokenExchange". However, there is no option to configure this in Amazon Cognito. It only issues tokens with the identity pool id as the audience. So we will configure the Cognito identity pool id as the audience in the federated identity credential. Tokens with this audience value are intended for Azure AD. (In this example: us-east-1:59d4a12a-deaa-4a98-85d1-b5d9fc2d41ef)
 
 Let's use these values to configure the federated identity credential on our managed identity. You can configure the federated credential on a managed identity using the Azure portal, the Azure CLI, or Azure ARM templates. The role of either owner or contributor is required to create the federated credential on a managed identity. 
 
@@ -166,7 +166,7 @@ On success, you should expect to see something like this:
 #### Verify you can access Azure using the Cognito token (optional)
 At this point, you have a Cognito pool setup with a Cognito identity. The Azure managed identity has a federated credential matching the Cognito identity. You can now do a quick test with the AWS and Azure CLIs and verify that you can access Azure resources available to that managed identity using the Cognito token.
 
-In my case, I have granted the managed identity access to my Azure blob storage. And I can do the following to verify the set up.
+In my case, I have granted the managed identity access to my Azure blob storage. And I can do the following to verify the setup.
 
 ##### Get a Cognito token using AWS CLI
 
@@ -191,7 +191,7 @@ az login --federated-token <Token string> --tenant <tenant id> \
     --service-principal -u <client_id of managed identity>
 ```
 
-If this succeeds, you should see a response that looks like:
+If this succeeds, you should see a response that looks like this:
 
 ```
 [
@@ -213,7 +213,7 @@ If this succeeds, you should see a response that looks like:
 ```
 
 ##### Access Azure resource
-Now access the Azure resource to which you granted access to the managed identity
+Now access the Azure resource available to the managed identity
 
 ```
 az storage blob exists --container-name test --name testBlob \
@@ -448,7 +448,7 @@ The audience claim in JWT tokens is critical for security reasons. It contains t
 In the  AWS Cognito identity pool, the audience is fixed and always the identity pool id.  Tokens issued by the identity pool are intended for a single recipient. When you configure Azure AD to accept tokens with the identity pool id as the audience, you make Azure AD the intended recipient of these tokens. It's a security best practice to avoid using tokens with the same audience when accessing AWS resources. Use a different identity pool for that purpose.
 
 ## In conclusion
-Azure AD workload identity federation is a capability that allows you to get rid of secrets in several scenarios such as services running in Kubernetes clusters, GitHub Actions workflow, and services running in Google and AWS Cloud. Stay tuned for many more scenarios  where this capability can help remove secrets.
+Azure AD workload identity federation is a capability that enables getting rid of secrets in several scenarios like services running in Kubernetes clusters, GitHub Actions workflow, and services running in Google and AWS Cloud. Stay tuned for many more use cases where this capability can help remove secrets.
 
 If you have any comments, feedback, or suggestions on this topic, I would love to hear from you. [DM me on twitter](https://twitter.com/messages/compose?recipient_id=1446741344)
 
