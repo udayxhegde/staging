@@ -3,7 +3,7 @@ layout: post
 current: post
 navigation: True
 title: Azure AD workload identity federation with AWS
-date: 2022-12-07 12:00:00
+date: 2022-12-06 12:00:00
 class: post-template
 subclass: 'post'
 author: uday
